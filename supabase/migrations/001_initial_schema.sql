@@ -111,35 +111,30 @@ CREATE POLICY "Users read own unlock_requests" ON public.unlock_requests
 CREATE POLICY "Users create unlock_requests" ON public.unlock_requests
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Admins: read/write all
+-- Admin role check (SECURITY DEFINER bypasses RLS to avoid infinite recursion)
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Admins: read/write all (using is_admin() to avoid RLS recursion)
 CREATE POLICY "Admins read all profiles" ON public.profiles
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+  FOR SELECT USING (public.is_admin());
 CREATE POLICY "Admins read all game_state" ON public.game_state
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+  FOR SELECT USING (public.is_admin());
 CREATE POLICY "Admins read all session_history" ON public.session_history
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+  FOR SELECT USING (public.is_admin());
 CREATE POLICY "Admins manage notes" ON public.admin_notes
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+  FOR ALL USING (public.is_admin());
 CREATE POLICY "Admins manage assignments" ON public.assigned_scenarios
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+  FOR ALL USING (public.is_admin());
 CREATE POLICY "Admins manage unlock_requests" ON public.unlock_requests
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+  FOR ALL USING (public.is_admin());
 CREATE POLICY "Admins read all generated_scenarios" ON public.generated_scenarios
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+  FOR SELECT USING (public.is_admin());
 
 -- ─── Auto-create profile + game_state on signup ─────────────────────
 CREATE OR REPLACE FUNCTION public.handle_new_user()
