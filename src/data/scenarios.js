@@ -212,6 +212,80 @@ export const SCENARIOS = {
                 ]
               }
             ]
+          },
+          {
+            id: "s2-new-captain",
+            title: "The New Captain",
+            energy_cost: 20,
+            xp_reward: 45,
+            setup: "Your basketball team just voted for a new captain. Aisha won — she's skilled and everyone respects her game. But the old captain, Marcus, who used to boss everyone around, is not taking it well. He's been making snide comments during practice.",
+            characters: ["Aisha (new captain, competence-based)", "Marcus (old captain, dominance-based)", "Teammates"],
+            social_context: "Sports team practice. Power shift happening. Both leaders watching how you respond.",
+            turns: [
+              {
+                situation: "During a water break, Marcus says loud enough for everyone to hear: \"Some people only got captain because they're the teacher's pet.\" Aisha looks hurt but doesn't respond. A few teammates glance at you.",
+                choices: [
+                  {
+                    text: "Say casually: \"Aisha's been our top scorer all season. That's not luck.\"",
+                    signals: ["Defends based on facts", "Supports competence hierarchy", "Doesn't attack Marcus directly"],
+                    outcome: "fact_defend",
+                    status_impact: 15,
+                    reputation_tag: "fair-minded"
+                  },
+                  {
+                    text: "Say to Marcus: \"Come on man, don't be a sore loser.\"",
+                    signals: ["Direct confrontation", "Calls out the behavior", "Could escalate"],
+                    outcome: "call_out",
+                    status_impact: 5,
+                    reputation_tag: "blunt"
+                  },
+                  {
+                    text: "Stay quiet and don't pick sides",
+                    signals: ["Avoids conflict", "Could look like you agree with Marcus", "Safe but passive"],
+                    outcome: "stay_quiet",
+                    status_impact: -5,
+                    reputation_tag: "bystander"
+                  },
+                  {
+                    text: "Laugh at Marcus's comment to stay on his good side",
+                    signals: ["Sides with dominance", "Betrays competence", "Short-term safety"],
+                    outcome: "laugh_along",
+                    status_impact: -15,
+                    reputation_tag: "follower"
+                  }
+                ]
+              },
+              {
+                situation_by_outcome: {
+                  fact_defend: "Aisha gives you a grateful nod. Marcus scowls but goes quiet. After practice, two teammates tell you that was cool. Marcus avoids you.",
+                  call_out: "Marcus turns red. \"Whatever, man.\" He walks away. Some teammates look relieved, others look tense. Aisha mouths 'thanks.'",
+                  stay_quiet: "Practice continues awkwardly. Aisha seems disappointed. Marcus takes your silence as agreement and sits next to you later, complaining more about Aisha.",
+                  laugh_along: "Marcus grins and claps your back. \"See? This guy gets it.\" Aisha's face falls. Two teammates who like Aisha give you a look of disappointment."
+                },
+                choices_by_outcome: {
+                  fact_defend: [
+                    { text: "Talk to Aisha after practice: \"Don't let Marcus get to you. Everyone sees what you bring.\"", signals: ["Builds alliance", "Reinforces competence"], outcome: "support_leader", status_impact: 10, reputation_tag: "supportive" },
+                    { text: "Talk to Marcus privately: \"Hey, I get it's tough, but fighting it makes you look bad.\"", signals: ["Bridge-building", "Helps Marcus save face"], outcome: "help_marcus", status_impact: 15, reputation_tag: "peacemaker" },
+                    { text: "Just move on and let it play out", signals: ["Confident", "Doesn't need to manage everyone"], outcome: "move_on", status_impact: 5, reputation_tag: "steady" }
+                  ],
+                  call_out: [
+                    { text: "Check in with Marcus later: \"No hard feelings. Just think the team needs to move forward.\"", signals: ["De-escalates", "Shows maturity"], outcome: "patch_up", status_impact: 10, reputation_tag: "mature" },
+                    { text: "Tell teammates: \"Someone had to say it\"", signals: ["Seeks validation", "Could seem like bragging"], outcome: "seek_credit", status_impact: -5, reputation_tag: "attention-seeker" },
+                    { text: "Let it be and focus on practice", signals: ["Moves forward", "Doesn't dwell"], outcome: "focus", status_impact: 5, reputation_tag: "focused" }
+                  ],
+                  stay_quiet: [
+                    { text: "Tell Marcus: \"I don't actually agree with you. Aisha earned it.\" (belatedly)", signals: ["Late but honest", "Better than nothing"], outcome: "late_stand", status_impact: 5, reputation_tag: "slow-but-honest" },
+                    { text: "Just nod along with Marcus's complaints", signals: ["Goes deeper into passive agreement", "Damages rep with others"], outcome: "nod_along", status_impact: -10, reputation_tag: "pushover" },
+                    { text: "Find Aisha later and privately say you support her", signals: ["Private support", "Doesn't address the public issue"], outcome: "private_support", status_impact: 5, reputation_tag: "cautious" }
+                  ],
+                  laugh_along: [
+                    { text: "Realize the mistake. Find Aisha: \"Sorry about laughing earlier. That wasn't cool of me.\"", signals: ["Self-awareness", "Repair attempt"], outcome: "apologize", status_impact: 10, reputation_tag: "honest" },
+                    { text: "Keep hanging with Marcus since you're already on his side", signals: ["Doubles down", "Damages relationships"], outcome: "stay_marcus", status_impact: -10, reputation_tag: "sellout" },
+                    { text: "Avoid both of them for a while", signals: ["Avoids consequences", "Doesn't resolve anything"], outcome: "avoid_all", status_impact: -5, reputation_tag: "avoidant" }
+                  ]
+                }
+              }
+            ]
           }
         ]
       },
@@ -277,6 +351,260 @@ export const SCENARIOS = {
                 ]
               }
             ]
+          },
+          {
+            id: "s3-angry-outburst",
+            title: "The Angry Outburst",
+            energy_cost: 20,
+            xp_reward: 45,
+            setup: "You're working on a group art project. Your classmate Nadia suddenly snaps at everyone: \"Nobody even asked what I wanted to do! You all just decided without me!\" The group goes silent.",
+            characters: ["Nadia (angry classmate)", "Two other group members", "You"],
+            social_context: "Group activity in class. Unexpected emotional outburst. Everyone is watching.",
+            turns: [
+              {
+                situation: "Nadia slams her pencil down and crosses her arms. Her face is red and her voice was shaky when she yelled. The other two group members look shocked. One mutters \"what's her problem?\"",
+                emotion_guess: {
+                  prompt: "What's really driving Nadia's anger?",
+                  options: [
+                    { text: "Her boundary was crossed — she feels excluded from decisions", correct: true, explanation: "Anger = boundary violation. Nadia's boundary is about being included in choices that affect her. The group made decisions without her input, crossing her need to be heard." },
+                    { text: "She's just having a bad day and taking it out on everyone", correct: false, explanation: "While possible, her words are very specific: 'nobody asked what I wanted.' This points to a specific boundary issue, not random bad mood." },
+                    { text: "She wants to control the project and is mad she can't", correct: false, explanation: "Control and inclusion are different. She didn't say 'I want to be in charge.' She said 'nobody asked me.' That's about being heard, not being boss." }
+                  ]
+                },
+                choices: [
+                  {
+                    text: "\"You're right, we should have asked. What would you like to do?\"",
+                    signals: ["Validates the feeling", "Addresses the real issue", "Gives her a voice"],
+                    outcome: "validate",
+                    status_impact: 15,
+                    reputation_tag: "empathetic"
+                  },
+                  {
+                    text: "\"Whoa, calm down. We can change it if you want.\"",
+                    signals: ["Dismisses the emotion", "Jumps to solution", "Telling someone to calm down never works"],
+                    outcome: "dismiss",
+                    status_impact: -10,
+                    reputation_tag: "dismissive"
+                  },
+                  {
+                    text: "Say nothing and wait for someone else to handle it",
+                    signals: ["Avoids involvement", "Leaves Nadia feeling more alone"],
+                    outcome: "silent",
+                    status_impact: -5,
+                    reputation_tag: "bystander"
+                  },
+                  {
+                    text: "\"We didn't mean to leave you out. Let's start over and hear everyone's ideas.\"",
+                    signals: ["Acknowledges without over-apologizing", "Offers fresh start", "Inclusive"],
+                    outcome: "restart",
+                    status_impact: 15,
+                    reputation_tag: "peacemaker"
+                  }
+                ]
+              },
+              {
+                situation_by_outcome: {
+                  validate: "Nadia takes a breath. Her shoulders drop. \"I just... I had ideas too, you know?\" She starts sharing her vision for the project. The other members listen.",
+                  dismiss: "Nadia's eyes flash. \"Don't tell me to calm down. That's exactly the problem — nobody takes me seriously.\" The tension gets worse.",
+                  silent: "Awkward silence continues. Nadia eventually puts her head down. The group tries to keep working but the mood is ruined.",
+                  restart: "Nadia looks surprised. \"Really?\" She uncrosses her arms. \"Okay... I was thinking we could do...\" The group dynamic shifts."
+                },
+                choices_by_outcome: {
+                  validate: [
+                    { text: "Listen actively and build on her ideas", signals: ["Collaboration", "Shows her input matters"], outcome: "build_together", status_impact: 10, reputation_tag: "team-player" },
+                    { text: "\"See? This is way better when everyone contributes.\"", signals: ["Positive reinforcement", "A bit teacherly"], outcome: "reinforce", status_impact: 5, reputation_tag: "encouraging" },
+                    { text: "Quietly make sure she's included in all decisions from now on", signals: ["Actions over words", "Consistent"], outcome: "quiet_include", status_impact: 10, reputation_tag: "reliable" }
+                  ],
+                  dismiss: [
+                    { text: "\"Sorry, I shouldn't have said calm down. What's your idea?\"", signals: ["Quick recovery", "Self-correction"], outcome: "recover", status_impact: 10, reputation_tag: "adaptable" },
+                    { text: "Get defensive: \"I was trying to help!\"", signals: ["Escalates", "Makes it about you"], outcome: "defensive", status_impact: -10, reputation_tag: "defensive" },
+                    { text: "Back off and stay quiet", signals: ["Retreats", "Doesn't resolve"], outcome: "retreat", status_impact: -5, reputation_tag: "avoidant" }
+                  ],
+                  silent: [
+                    { text: "Eventually speak up: \"Hey Nadia, what were you thinking for the project?\"", signals: ["Better late than never", "Shows you noticed"], outcome: "late_ask", status_impact: 5, reputation_tag: "thoughtful" },
+                    { text: "DM Nadia later: \"Sorry about earlier. What did you want to do?\"", signals: ["Private follow-up", "Shows care but delayed"], outcome: "dm_later", status_impact: 5, reputation_tag: "cautious" },
+                    { text: "Just keep working and hope it blows over", signals: ["Ignores the problem", "It won't blow over"], outcome: "ignore", status_impact: -10, reputation_tag: "oblivious" }
+                  ],
+                  restart: [
+                    { text: "Make sure everyone goes around and shares their idea", signals: ["Fair process", "Good facilitation"], outcome: "round_robin", status_impact: 10, reputation_tag: "leader" },
+                    { text: "\"Cool, let's vote on which direction to go\"", signals: ["Democratic", "Moves things forward"], outcome: "vote", status_impact: 10, reputation_tag: "fair" },
+                    { text: "Let the conversation flow naturally from here", signals: ["Trusts the group", "Doesn't over-manage"], outcome: "flow", status_impact: 5, reputation_tag: "relaxed" }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "ch-3b": {
+        title: "Emotional Pattern Recognition II",
+        subtitle: "Advanced emotional drivers",
+        concepts: [
+          "Guilt = carrying responsibility weight",
+          "Jealousy = perceived unfairness signal",
+          "Excitement = anticipation overflow",
+          "Sarcasm = masked hurt",
+          "Over-friendliness = insecurity or manipulation",
+          "Defensiveness = shame protection"
+        ],
+        scenarios: [
+          {
+            id: "s3b-guilt-trip",
+            title: "The Guilt Trip",
+            energy_cost: 20,
+            xp_reward: 45,
+            setup: "Your friend Lena accidentally broke your phone case yesterday. It was cheap and easily replaceable, but Lena has been apologizing non-stop all day — texting sorry, buying you snacks, and looking miserable every time she sees you.",
+            characters: ["Lena (guilt-ridden friend)", "You"],
+            social_context: "School hallway and lunch. One-on-one. Your friend is clearly suffering more than the situation warrants.",
+            turns: [
+              {
+                situation: "Lena approaches you at lunch with ANOTHER apology and a drink she bought you. \"I'm so sorry again. I feel terrible. Are you sure you're not mad?\" She's asked this four times today.",
+                emotion_guess: {
+                  prompt: "What's really going on with Lena?",
+                  options: [
+                    { text: "She feels guilty — carrying more responsibility weight than the situation deserves", correct: true, explanation: "Guilt = responsibility weight. Lena's brain is telling her she did something terrible, even though the damage was small. The over-apologizing is her trying to put down that heavy weight." },
+                    { text: "She's afraid you'll stop being her friend", correct: false, explanation: "While fear might be part of it, the core emotion is guilt — she keeps saying 'sorry' and 'I feel terrible', not 'please don't leave me.'" },
+                    { text: "She's being dramatic for attention", correct: false, explanation: "Guilt doesn't look like attention-seeking. Lena looks miserable, not performative. She's genuinely carrying emotional weight." }
+                  ]
+                },
+                choices: [
+                  {
+                    text: "\"Lena, seriously — it's okay. It was a $5 case. I'm not mad at all. You can stop apologizing.\"",
+                    signals: ["Clear reassurance", "Names the fact it's minor", "Gives permission to let go"],
+                    outcome: "clear_release",
+                    status_impact: 15,
+                    reputation_tag: "reassuring"
+                  },
+                  {
+                    text: "\"It's fine, whatever.\" (brush it off quickly)",
+                    signals: ["Dismissive", "Doesn't actually address her guilt", "She'll keep apologizing"],
+                    outcome: "brush_off",
+                    status_impact: 0,
+                    reputation_tag: "dismissive"
+                  },
+                  {
+                    text: "\"You've apologized enough. Can we talk about literally anything else?\"",
+                    signals: ["Direct but slightly impatient", "Sets a boundary", "Might come across harsh"],
+                    outcome: "blunt_boundary",
+                    status_impact: 5,
+                    reputation_tag: "direct"
+                  },
+                  {
+                    text: "Accept the drink and joke: \"If you keep buying me stuff, I might break my own phone case next time.\"",
+                    signals: ["Humor to defuse", "Shows it's truly not a big deal", "Light touch"],
+                    outcome: "humor_defuse",
+                    status_impact: 15,
+                    reputation_tag: "easy-going"
+                  }
+                ]
+              },
+              {
+                situation_by_outcome: {
+                  clear_release: "Lena takes a deep breath and actually smiles. \"Okay. Okay, I'll stop. I just felt so bad.\" She seems lighter. You have lunch together and she's back to normal.",
+                  brush_off: "Lena nods but doesn't look convinced. An hour later, she texts: \"But are you SURE you're not upset?\" The guilt cycle continues.",
+                  blunt_boundary: "Lena looks a bit stung but nods. \"Yeah, sorry. I mean — not sorry. I mean...\" She laughs awkwardly. The guilt eases but she seems a bit hurt.",
+                  humor_defuse: "Lena laughs for the first time today. \"Okay fine, but I'm not buying you lunch forever.\" The tension dissolves completely."
+                },
+                choices_by_outcome: {
+                  clear_release: [
+                    { text: "Change the topic to something fun", signals: ["Moves forward", "Normalizes everything"], outcome: "move_on", status_impact: 5, reputation_tag: "good-friend" },
+                    { text: "\"For real though, we're good. Now tell me about that show you started.\"", signals: ["Confirms + redirects", "Warm"], outcome: "warm_redirect", status_impact: 10, reputation_tag: "caring" }
+                  ],
+                  brush_off: [
+                    { text: "Actually take time to reassure her properly: \"Hey, I mean it — we're totally fine. I promise.\"", signals: ["Corrects the dismissiveness", "Proper reassurance"], outcome: "proper_reassure", status_impact: 10, reputation_tag: "thoughtful" },
+                    { text: "Ignore her texts about it", signals: ["Avoids", "Guilt continues"], outcome: "ignore_texts", status_impact: -5, reputation_tag: "avoidant" }
+                  ],
+                  blunt_boundary: [
+                    { text: "Add warmth: \"Seriously, we're fine. I just don't want you feeling bad over nothing.\"", signals: ["Softens the directness", "Shows care"], outcome: "soften", status_impact: 10, reputation_tag: "balanced" },
+                    { text: "Move on without addressing the slight sting", signals: ["Boundary set but rougher than needed"], outcome: "rough_move_on", status_impact: 0, reputation_tag: "blunt" }
+                  ],
+                  humor_defuse: [
+                    { text: "Keep the light mood going through lunch", signals: ["Playful", "Builds connection"], outcome: "keep_light", status_impact: 5, reputation_tag: "fun" },
+                    { text: "Circle back genuinely: \"But seriously, don't stress about it.\"", signals: ["Humor + sincerity", "Complete resolution"], outcome: "genuine_close", status_impact: 10, reputation_tag: "warm" }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            id: "s3b-green-eyed-gamer",
+            title: "The Green-Eyed Gamer",
+            energy_cost: 20,
+            xp_reward: 45,
+            setup: "You just got accepted into an advanced coding program that's really hard to get into. You're excited and tell your friend Dev, who also applied. Dev didn't get in. His reaction is... not what you expected.",
+            characters: ["Dev (competitive friend)", "You"],
+            social_context: "After school. One-on-one. Achievement gap between close friends. Emotions running high.",
+            turns: [
+              {
+                situation: "When you tell Dev, he says \"Oh. Cool. I mean, they probably had a quota to fill.\" His jaw is tight and he won't look at you. He changes the subject immediately.",
+                emotion_guess: {
+                  prompt: "What's Dev really feeling?",
+                  options: [
+                    { text: "Jealousy — his brain's fairness alarm is going off", correct: true, explanation: "Jealousy = perceived unfairness signal. Dev's brain is saying 'we're equals, so why did they get it and not me?' The snarky comment ('quota to fill') is his way of making the outcome feel less fair, which reduces his pain." },
+                    { text: "He's genuinely happy for you but just disappointed about himself", correct: false, explanation: "If he were genuinely happy, he wouldn't dismiss your achievement ('quota to fill'). The dig shows he's not just sad about himself — he's bothered that YOU got it." },
+                    { text: "He doesn't care and is just being sarcastic", correct: false, explanation: "The tight jaw, avoiding eye contact, and immediate subject change all show he cares a LOT. Indifference looks relaxed. This looks tense." }
+                  ]
+                },
+                choices: [
+                  {
+                    text: "Don't react to the comment. Give him space: \"I know it's a weird situation. I'd feel the same way.\"",
+                    signals: ["Acknowledges the awkwardness", "Normalizes his feeling", "Doesn't gloat"],
+                    outcome: "empathize",
+                    status_impact: 15,
+                    reputation_tag: "emotionally-aware"
+                  },
+                  {
+                    text: "\"Come on, don't be like that. You'll get in next time.\"",
+                    signals: ["Dismisses his feeling", "Sounds patronizing", "Well-meaning but misses the mark"],
+                    outcome: "dismiss",
+                    status_impact: -5,
+                    reputation_tag: "tone-deaf"
+                  },
+                  {
+                    text: "Downplay your achievement: \"It's probably not even that good. I bet I got lucky.\"",
+                    signals: ["Shrinks yourself to manage his feelings", "Dishonest", "Temporary fix"],
+                    outcome: "downplay",
+                    status_impact: -5,
+                    reputation_tag: "people-pleaser"
+                  },
+                  {
+                    text: "\"That 'quota' comment is kind of rude. I worked hard for this.\"",
+                    signals: ["Stands up for yourself", "Addresses the dig directly", "Could escalate"],
+                    outcome: "confront",
+                    status_impact: 5,
+                    reputation_tag: "direct"
+                  }
+                ]
+              },
+              {
+                situation_by_outcome: {
+                  empathize: "Dev is quiet for a moment. Then he says: \"Yeah... I'm being a jerk. Sorry. I'm just bummed.\" His shoulders relax. The honesty opens things up.",
+                  dismiss: "Dev's expression hardens. \"I don't need your pity. Whatever.\" He puts in his earbuds. The conversation is over.",
+                  downplay: "Dev seems slightly better but says: \"You don't have to do that.\" He knows you're being fake. The weirdness remains.",
+                  confront: "Dev looks caught. \"I... yeah, sorry. That was uncool.\" He's embarrassed but also seems to respect that you called it out."
+                },
+                choices_by_outcome: {
+                  empathize: [
+                    { text: "\"For real though, your project was sick. The next round is yours.\"", signals: ["Genuine encouragement", "Specific praise"], outcome: "encourage", status_impact: 10, reputation_tag: "uplifting" },
+                    { text: "Change the topic to something you both enjoy", signals: ["Moves past the tension", "Doesn't dwell"], outcome: "move_on", status_impact: 5, reputation_tag: "socially-smooth" },
+                    { text: "\"Want to work on a coding project together this weekend?\"", signals: ["Inclusive", "Channels the competitive energy"], outcome: "include", status_impact: 15, reputation_tag: "generous" }
+                  ],
+                  dismiss: [
+                    { text: "Give him space. Text later: \"Hey, sorry if I came off wrong. I know it sucks.\"", signals: ["Delayed repair", "Shows reflection"], outcome: "text_later", status_impact: 5, reputation_tag: "persistent" },
+                    { text: "Let it go — he needs time", signals: ["Patient", "Respects his process"], outcome: "wait", status_impact: 0, reputation_tag: "patient" },
+                    { text: "Feel hurt and distance yourself from Dev", signals: ["Reactive", "Both lose"], outcome: "distance", status_impact: -10, reputation_tag: "reactive" }
+                  ],
+                  downplay: [
+                    { text: "Be honest: \"Okay, you're right. I am excited. But I also want us to be cool.\"", signals: ["Corrects course", "Authentic"], outcome: "be_real", status_impact: 10, reputation_tag: "authentic" },
+                    { text: "Keep minimizing to keep the peace", signals: ["Continues being inauthentic", "Resentment builds"], outcome: "keep_minimizing", status_impact: -10, reputation_tag: "self-diminishing" }
+                  ],
+                  confront: [
+                    { text: "\"We're good. I just want to be able to share stuff with you without it being weird.\"", signals: ["Sets healthy expectation", "Forward-looking"], outcome: "set_norm", status_impact: 10, reputation_tag: "mature" },
+                    { text: "\"I get it, I'd probably be jealous too. But we're cool, right?\"", signals: ["Normalizes + checks in", "Balanced"], outcome: "normalize", status_impact: 10, reputation_tag: "balanced" }
+                  ]
+                }
+              }
+            ]
           }
         ]
       }
@@ -336,6 +664,80 @@ export const SCENARIOS = {
                     reputation_tag: "doormat"
                   }
                 ]
+              }
+            ]
+          },
+          {
+            id: "s4-credit-thief",
+            title: "The Credit Thief",
+            energy_cost: 20,
+            xp_reward: 50,
+            setup: "You spent all weekend working on the key part of your group presentation. During the presentation, your teammate Ethan presents YOUR section and takes credit for the research and ideas. The teacher praises Ethan specifically.",
+            characters: ["Ethan (credit-taker)", "Ms. Park (teacher)", "Two other teammates", "Class"],
+            social_context: "Class presentation. Public credit attribution. Your work being claimed by someone else.",
+            turns: [
+              {
+                situation: "Ethan just finished presenting your section to applause. Ms. Park says: \"Great job on that analysis, Ethan.\" Ethan smiles and nods. Your other teammates exchange a glance — they know you did that work.",
+                choices: [
+                  {
+                    text: "During Q&A, naturally add context: \"When I was researching that section, I found that...\" — showing you did the work without directly accusing Ethan",
+                    signals: ["Subtle correction", "Demonstrates ownership through knowledge", "Non-confrontational"],
+                    outcome: "subtle_claim",
+                    status_impact: 15,
+                    reputation_tag: "clever"
+                  },
+                  {
+                    text: "After class, talk to Ms. Park: \"I wanted to mention that I actually did the research for that section. Happy to share my notes.\"",
+                    signals: ["Private correction", "Provides evidence", "Doesn't embarrass Ethan publicly"],
+                    outcome: "tell_teacher",
+                    status_impact: 10,
+                    reputation_tag: "honest"
+                  },
+                  {
+                    text: "Call Ethan out in front of everyone: \"Actually, I did all that research. Ethan just read my slides.\"",
+                    signals: ["Public confrontation", "True but socially costly", "Makes the whole team look bad"],
+                    outcome: "public_callout",
+                    status_impact: -10,
+                    reputation_tag: "confrontational"
+                  },
+                  {
+                    text: "Let it go. It's not worth the drama.",
+                    signals: ["Avoids conflict", "Sets a precedent for being walked over", "Peace at a cost"],
+                    outcome: "let_go",
+                    status_impact: -10,
+                    reputation_tag: "pushover"
+                  }
+                ]
+              },
+              {
+                situation_by_outcome: {
+                  subtle_claim: "Ms. Park raises an eyebrow and looks between you and Ethan. \"Oh, you did the research?\" Ethan shifts uncomfortably. Your teammates nod. The truth becomes clear without anyone making a scene.",
+                  tell_teacher: "Ms. Park listens and checks your notes. \"Thank you for telling me. I'll make sure credit is given properly on the grade.\" She seems to appreciate your maturity.",
+                  public_callout: "The room goes tense. Ethan sputters \"We all worked on it.\" Ms. Park frowns. Some classmates look uncomfortable. Your teammates wish you'd handled it differently.",
+                  let_go: "Ethan gets praised in the hallway after class. Your teammates are frustrated: \"Why didn't you say anything? That was YOUR work.\" You feel a mix of regret and resentment."
+                },
+                choices_by_outcome: {
+                  subtle_claim: [
+                    { text: "After class, talk to Ethan: \"Hey, I'd appreciate credit for my work next time. We good?\"", signals: ["Clear boundary", "Private", "Forward-looking"], outcome: "set_boundary", status_impact: 10, reputation_tag: "assertive" },
+                    { text: "Leave it — the point was made without drama", signals: ["Confident", "Lets actions speak"], outcome: "point_made", status_impact: 5, reputation_tag: "secure" },
+                    { text: "Tell your teammates: \"Can you believe Ethan tried to take credit?\"", signals: ["Gossip", "Creates drama after resolution"], outcome: "gossip", status_impact: -10, reputation_tag: "drama-starter" }
+                  ],
+                  tell_teacher: [
+                    { text: "Talk to Ethan too: \"I told Ms. Park I did that section. Just want us to be honest going forward.\"", signals: ["Direct", "Sets expectation", "Not sneaky"], outcome: "direct_honest", status_impact: 10, reputation_tag: "direct" },
+                    { text: "Don't tell Ethan. Let the grade speak for itself.", signals: ["Avoids confrontation", "Could feel sneaky to Ethan"], outcome: "grade_speaks", status_impact: 0, reputation_tag: "cautious" },
+                    { text: "Ask Ms. Park to talk to Ethan about it", signals: ["Passes the conflict to authority", "Appropriate but could seem petty"], outcome: "teacher_handles", status_impact: 0, reputation_tag: "rule-follower" }
+                  ],
+                  public_callout: [
+                    { text: "Apologize for the outburst but restate: \"Sorry for how I said it, but I did do that research.\"", signals: ["Repair attempt", "Holds ground on facts"], outcome: "repair", status_impact: 5, reputation_tag: "recovering" },
+                    { text: "Double down: \"Everyone here knows I did the work\"", signals: ["Escalates further", "Makes everyone uncomfortable"], outcome: "escalate", status_impact: -15, reputation_tag: "aggressive" },
+                    { text: "Walk away frustrated", signals: ["Unresolved", "Emotional exit"], outcome: "walk_away", status_impact: -5, reputation_tag: "frustrated" }
+                  ],
+                  let_go: [
+                    { text: "Promise yourself to speak up next time. Set up shared docs so credit is traceable.", signals: ["Learning from it", "Prevents future issues"], outcome: "learn_lesson", status_impact: 5, reputation_tag: "growing" },
+                    { text: "Complain to friends about Ethan", signals: ["Venting without acting", "Doesn't solve anything"], outcome: "vent", status_impact: -5, reputation_tag: "venter" },
+                    { text: "Stop putting effort into group projects since people just steal credit", signals: ["Giving up", "Hurts yourself most"], outcome: "give_up", status_impact: -15, reputation_tag: "checked-out" }
+                  ]
+                }
               }
             ]
           }

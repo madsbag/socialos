@@ -1,5 +1,7 @@
 // SocialOS — Dynamic Scenario Generator
-// Uses Claude API to generate new scenario variations based on chapter templates
+// Uses Claude API (via Vercel proxy) to generate new scenario variations
+
+import { callAnthropic } from './api';
 
 const CHAPTER_CONTEXT = {
   "ch-1": {
@@ -19,6 +21,12 @@ const CHAPTER_CONTEXT = {
     focus: "Anger = boundary violation, withdrawal = overwhelm, arrogance = insecurity, silence = processing or disengagement",
     targetSkills: ["identifying emotional drivers", "reading body language cues", "responding to emotional states"],
     sampleSettings: ["friend's house", "after-school activity", "bus ride", "lunch table", "study group"],
+  },
+  "ch-3b": {
+    title: "Emotional Pattern Recognition II",
+    focus: "Guilt = responsibility weight, jealousy = perceived unfairness, excitement = anticipation overflow, sarcasm = masked hurt, over-friendliness = insecurity or manipulation, defensiveness = shame protection",
+    targetSkills: ["identifying advanced emotional drivers", "distinguishing similar-looking emotions", "responding to masked emotions"],
+    sampleSettings: ["group project", "after-school hangout", "text conversation", "family event", "gaming session", "school trip"],
   },
   "ch-4": {
     title: "Team Mode Mechanics",
@@ -50,6 +58,18 @@ const CHAPTER_CONTEXT = {
     targetSkills: ["staying calm under pressure", "validating without agreeing", "redirecting anger", "finding resolution"],
     sampleSettings: ["argument with friend", "bullying situation", "sibling fight", "online conflict", "misunderstanding"],
   },
+  "ch-9": {
+    title: "Social Energy Management",
+    focus: "Recognizing social battery limits, saying no gracefully, choosing which events to attend, recharging strategies",
+    targetSkills: ["recognizing energy drain", "saying no without guilt", "prioritizing social events", "recharging effectively"],
+    sampleSettings: ["weekend plans", "school day transitions", "party invitations", "group activities", "quiet time negotiations"],
+  },
+  "ch-10": {
+    title: "Dynamic Scenarios — Mastery Mode",
+    focus: "Multi-character scenarios with reputation consequences, long-term thinking, navigating complex social webs where your pattern matters more than any single choice",
+    targetSkills: ["reputation management", "multi-character awareness", "long-term consequence thinking", "pattern consistency", "reading social networks"],
+    sampleSettings: ["new school", "friend group shift", "team reorganization", "online community", "neighborhood dynamics"],
+  },
   "ch-11": {
     title: "Parental Interaction",
     focus: "Navigating parent relationships — reading mood, timing requests, handling restrictions, earning trust",
@@ -62,28 +82,23 @@ const CHAPTER_CONTEXT = {
     targetSkills: ["de-escalating sibling conflict", "sharing fairly", "building sibling alliance", "setting boundaries"],
     sampleSettings: ["shared bedroom", "family game night", "car trip", "chore time", "holiday gathering"],
   },
-  "ch-10": {
-    title: "Dynamic Scenarios — Mastery Mode",
-    focus: "Multi-character scenarios with reputation consequences, long-term thinking, navigating complex social webs where your pattern matters more than any single choice",
-    targetSkills: ["reputation management", "multi-character awareness", "long-term consequence thinking", "pattern consistency", "reading social networks"],
-    sampleSettings: ["new school", "friend group shift", "team reorganization", "online community", "neighborhood dynamics"],
-  },
 };
 
-const SYSTEM_PROMPT = `You are the scenario engine for SocialOS, a social intelligence training system designed for a 14-year-old with ASD who thinks analytically.
+const SYSTEM_PROMPT = `You are the scenario engine for SocialOS, a social skills practice game for teenagers aged 11-15 with ASD.
 
 You generate NEW practice scenarios that follow a strict JSON structure. The scenarios teach social dynamics through branching decision trees.
 
 RULES:
-1. Age-appropriate for 14-year-old — school, family, friends, online interactions
-2. Analytically framed — treat social dynamics as systems with inputs and outputs
-3. Each choice must have clear social SIGNALS (what it communicates to others)
+1. Age-appropriate for 11-15 year olds — school, family, friends, online interactions
+2. Use clear, direct language. Short sentences. Avoid long words when short ones work.
+3. Each choice must have clear social SIGNALS (what it tells others about you)
 4. Status impacts must be realistic (-20 to +20 range)
 5. Reputation tags should be specific and meaningful (e.g., "strategic", "pushover", "direct-communicator")
 6. Turn 2 must branch based on Turn 1 outcome keys
 7. Include 3-4 choices per turn with a range of approaches (passive, assertive, aggressive, strategic)
 8. Keep setup and situations concrete and specific — not abstract
 9. Make it feel like a real situation the player might encounter
+10. Use gaming metaphors where they help explain social mechanics
 
 OUTPUT: Return ONLY valid JSON. No markdown, no code blocks, no explanation.`;
 
@@ -155,7 +170,7 @@ function buildEmotionGuessPrompt(chapterId) {
   if (!ctx) return null;
 
   // Only chapters focused on emotional recognition get emotion guess
-  const emotionChapters = ["ch-3", "ch-6", "ch-8", "ch-11", "ch-12"];
+  const emotionChapters = ["ch-3", "ch-3b", "ch-6", "ch-8", "ch-11", "ch-12"];
   if (!emotionChapters.includes(chapterId)) return null;
 
   return `\n\nADDITIONAL REQUIREMENT: This chapter focuses on emotional pattern recognition.
@@ -171,41 +186,19 @@ Add an "emotion_guess" object to Turn 1 with this structure:
 Exactly ONE option should be correct. The correct answer should be the non-obvious, analytically deeper read.`;
 }
 
-export async function generateScenario(chapterId, existingTitles = [], apiKey = null) {
+export async function generateScenario(chapterId, existingTitles = []) {
   const prompt = buildGenerationPrompt(chapterId, existingTitles);
   if (!prompt) throw new Error(`No context defined for chapter ${chapterId}`);
 
   const emotionAddendum = buildEmotionGuessPrompt(chapterId) || "";
   const fullPrompt = prompt + emotionAddendum;
 
-  // Use environment variable or passed key
-  const key = apiKey || import.meta.env.VITE_ANTHROPIC_API_KEY;
-  if (!key) {
-    throw new Error("No API key available. Set VITE_ANTHROPIC_API_KEY in .env");
-  }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 2500,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: fullPrompt }],
-    }),
+  const data = await callAnthropic({
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: fullPrompt }],
+    max_tokens: 2500,
   });
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`API error ${response.status}: ${err}`);
-  }
-
-  const data = await response.json();
   const text = data.content?.map(b => b.text || "").join("") || "";
 
   // Parse JSON from response — handle potential markdown wrapping

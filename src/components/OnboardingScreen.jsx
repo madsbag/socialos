@@ -14,7 +14,7 @@ const SLIDES = [
     icon: "\u2B50",
     title: "XP",
     subtitle: "Experience Points",
-    body: "You earn XP by completing scenarios. It doesn't matter if you make 'perfect' choices \u2014 you learn from every path. XP tracks how much practice you've put in, not how 'good' you are.",
+    body: "You earn XP by completing scenarios. It doesn't matter if you make 'perfect' choices \u2014 you learn from every path. XP unlocks new levels: Level 2 at 150 XP, Level 3 at 400 XP, Level 4 at 800 XP. Keep practicing to unlock everything!",
     color: theme.xp,
     bgColor: "#FFF8E5",
   },

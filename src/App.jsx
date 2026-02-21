@@ -1,88 +1,96 @@
 import { useState, useEffect, useRef } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { theme, LEVEL_ICONS } from "./theme";
 import { SCENARIOS } from "./data/scenarios";
 import { FLASHCARDS } from "./data/flashcards";
 import OnboardingScreen from "./components/OnboardingScreen";
 import SwipeDeck from "./components/SwipeDeck";
-import ParentDashboard from "./components/ParentDashboard";
+import LoginScreen from "./components/LoginScreen";
+import AdminDashboard from "./components/AdminDashboard";
+import { useAuth } from "./contexts/AuthContext";
+import { useGame } from "./contexts/GameContext";
 import { generateScenario, canGenerateForChapter } from "./services/scenarioGenerator";
-import {
-  getGeneratedScenarios,
-  saveGeneratedScenario,
-  removeGeneratedScenario,
-  logSession,
-  getAssignedScenarios,
-  completeAssignment,
-} from "./services/storage";
+import { callAnthropic } from "./services/api";
+
+// XP requirements per level
+const LEVEL_XP_REQUIREMENTS = {
+  "level-1": 0,
+  "level-2": 150,
+  "level-3": 400,
+  "level-4": 800,
+};
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────
-export default function SocialOS() {
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function AdminRoute({ children }) {
+  const { user, isAdmin, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!isAdmin) return <Navigate to="/" replace />;
+  return children;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginRoute />} />
+      <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+      <Route path="/*" element={<ProtectedRoute><SocialOS /></ProtectedRoute>} />
+    </Routes>
+  );
+}
+
+function LoginRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (user) return <Navigate to="/" replace />;
+  return <LoginScreen />;
+}
+
+function SocialOS() {
+  const navigate = useNavigate();
+  const { user, isAdmin, signOut } = useAuth();
+  const {
+    loading: gameLoading, migrating,
+    energy, xp, statusScore, reputation, completedScenarios,
+    flashcardProgress, onboardingSeen,
+    generatedScenarios, assignments,
+    updateGameState, forceSave,
+    handleScenarioComplete, completeFlashcards,
+    rechargeEnergy, markOnboardingSeen, resetAllProgress,
+    handleGenerateScenario, handleRemoveGenerated,
+    handleRequestUnlock, getApprovedExtraSlots, hasPendingRequest,
+  } = useGame();
+
   const [screen, setScreen] = useState("home");
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [selectedChapter, setSelectedChapter] = useState(null);
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [currentTurn, setCurrentTurn] = useState(0);
   const [choiceHistory, setChoiceHistory] = useState([]);
+  const [debriefChoices, setDebriefChoices] = useState([]);
   const [lastOutcome, setLastOutcome] = useState(null);
   const [showSignals, setShowSignals] = useState(false);
   const [emotionGuess, setEmotionGuess] = useState(null);
   const [emotionFeedback, setEmotionFeedback] = useState(null);
   const [animatingChoice, setAnimatingChoice] = useState(null);
-  const [energy, setEnergy] = useState(
-    () => {
-      const saved = localStorage.getItem("socialos-energy");
-      return saved !== null ? JSON.parse(saved) : 100;
-    }
-  );
-  const [xp, setXp] = useState(
-    () => {
-      const saved = localStorage.getItem("socialos-xp");
-      return saved !== null ? JSON.parse(saved) : 0;
-    }
-  );
-  const [statusScore, setStatusScore] = useState(
-    () => {
-      const saved = localStorage.getItem("socialos-status");
-      return saved !== null ? JSON.parse(saved) : 0;
-    }
-  );
-  const [reputation, setReputation] = useState(
-    () => JSON.parse(localStorage.getItem("socialos-reputation") || "{}")
-  );
-  const [completedScenarios, setCompletedScenarios] = useState(
-    () => JSON.parse(localStorage.getItem("socialos-completed") || "[]")
-  );
   const [debriefText, setDebriefText] = useState("");
   const [debriefLoading, setDebriefLoading] = useState(false);
-
-  // Phase 2 — Generated scenarios & parent dashboard
-  const [generatedScenarios, setGeneratedScenarios] = useState(() => getGeneratedScenarios());
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState(null);
-  const [assignments, setAssignments] = useState(() => getAssignedScenarios());
-
-  // Persist game state to localStorage
-  useEffect(() => { localStorage.setItem("socialos-energy", JSON.stringify(energy)); }, [energy]);
-  useEffect(() => { localStorage.setItem("socialos-xp", JSON.stringify(xp)); }, [xp]);
-  useEffect(() => { localStorage.setItem("socialos-status", JSON.stringify(statusScore)); }, [statusScore]);
-  useEffect(() => { localStorage.setItem("socialos-reputation", JSON.stringify(reputation)); }, [reputation]);
-  useEffect(() => { localStorage.setItem("socialos-completed", JSON.stringify(completedScenarios)); }, [completedScenarios]);
   const [fadeIn, setFadeIn] = useState(false);
+  const [debriefStatusDelta, setDebriefStatusDelta] = useState(0);
   const scrollRef = useRef(null);
 
-  // Onboarding
-  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(
-    () => localStorage.getItem("socialos-onboarding-seen") === "true"
-  );
-
-  // Flashcard progress: { "ch-1": 3, "ch-2": 1, ... }
-  const [flashcardProgress, setFlashcardProgress] = useState(
-    () => JSON.parse(localStorage.getItem("socialos-flashcard-progress") || "{}")
-  );
-
   useEffect(() => {
-    if (!hasSeenOnboarding) setScreen("onboarding");
-  }, []);
+    if (!onboardingSeen && !gameLoading) setScreen("onboarding");
+  }, [onboardingSeen, gameLoading]);
 
   useEffect(() => {
     setFadeIn(false);
@@ -90,8 +98,13 @@ export default function SocialOS() {
     return () => clearTimeout(t);
   }, [screen, selectedScenario, currentTurn]);
 
+  // During active play, show in-progress status
   const scenarioStatus = choiceHistory.reduce((sum, c) => sum + (c.status_impact || 0), 0);
   const totalStatus = statusScore + scenarioStatus;
+
+  if (gameLoading || migrating) {
+    return <LoadingScreen message={migrating ? "Migrating your data to the cloud..." : "Loading..."} />;
+  }
 
   // ─── NAVIGATION ──────────────────────────────────────────────────
   function goHome() {
@@ -101,6 +114,7 @@ export default function SocialOS() {
     setSelectedScenario(null);
     setCurrentTurn(0);
     setChoiceHistory([]);
+    setDebriefChoices([]);
     setLastOutcome(null);
     setShowSignals(false);
     setEmotionGuess(null);
@@ -108,6 +122,9 @@ export default function SocialOS() {
   }
 
   function openLevel(levelId) {
+    // XP gating check
+    const required = LEVEL_XP_REQUIREMENTS[levelId] || 0;
+    if (xp < required) return;
     setSelectedLevel(levelId);
     setScreen("levels");
   }
@@ -122,18 +139,13 @@ export default function SocialOS() {
     setScreen("flashcards");
   }
 
-  function completeFlashcards(chapterId, totalCards) {
-    setFlashcardProgress(prev => {
-      const updated = { ...prev, [chapterId]: totalCards };
-      localStorage.setItem("socialos-flashcard-progress", JSON.stringify(updated));
-      return updated;
-    });
+  function handleCompleteFlashcards(chapterId, totalCards) {
+    completeFlashcards(chapterId, totalCards);
     setScreen("chapter");
   }
 
   function completeOnboarding() {
-    localStorage.setItem("socialos-onboarding-seen", "true");
-    setHasSeenOnboarding(true);
+    markOnboardingSeen();
     setScreen("home");
   }
 
@@ -142,6 +154,7 @@ export default function SocialOS() {
     setSelectedScenario(scenario);
     setCurrentTurn(0);
     setChoiceHistory([]);
+    setDebriefChoices([]);
     setLastOutcome(null);
     setShowSignals(false);
     setEmotionGuess(null);
@@ -169,35 +182,17 @@ export default function SocialOS() {
 
   async function finishScenario(lastChoice) {
     const allChoices = [...choiceHistory, lastChoice];
-    setEnergy(prev => Math.max(0, prev - selectedScenario.energy_cost));
-    setXp(prev => prev + selectedScenario.xp_reward);
-    // Accumulate status from all choices in this scenario
-    const scenarioStatusDelta = allChoices.reduce((sum, c) => sum + (c.status_impact || 0), 0);
-    setStatusScore(prev => prev + scenarioStatusDelta);
-    // Collect all reputation tags from this scenario
-    const scenarioTags = [];
-    allChoices.forEach(c => {
-      if (c.reputation_tag) {
-        scenarioTags.push(c.reputation_tag);
-        setReputation(prev => ({ ...prev, [c.reputation_tag]: (prev[c.reputation_tag] || 0) + 1 }));
-      }
-    });
-    setCompletedScenarios(prev =>
-      prev.includes(selectedScenario.id) ? prev : [...prev, selectedScenario.id]
-    );
-    // Log session for parent dashboard
-    logSession(
-      selectedScenario.id,
-      selectedScenario.title,
-      allChoices,
-      scenarioStatusDelta,
-      scenarioTags
-    );
-    // Complete assignment if this scenario was assigned
-    if (assignments.some(a => a.scenarioId === selectedScenario.id && !a.completed)) {
-      completeAssignment(selectedScenario.id);
-      setAssignments(getAssignedScenarios());
-    }
+    const statusDelta = allChoices.reduce((sum, c) => sum + (c.status_impact || 0), 0);
+
+    // Save debrief data BEFORE clearing choice history
+    setDebriefChoices(allChoices);
+    setDebriefStatusDelta(statusDelta);
+    // Clear choice history so header shows correct total (no double-counting)
+    setChoiceHistory([]);
+
+    // Persist to database
+    await handleScenarioComplete(selectedScenario, allChoices);
+
     setScreen("debrief");
     await generateDebrief(allChoices);
   }
@@ -206,33 +201,23 @@ export default function SocialOS() {
     setDebriefLoading(true);
     const prompt = buildDebriefPrompt(allChoices);
     try {
-      const key = import.meta.env.VITE_ANTHROPIC_API_KEY;
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": key,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: `You are the analytical coach in SocialOS, a social intelligence training system designed for people with ASD who think analytically. Your job is to debrief a scenario the player just completed.
+      const data = await callAnthropic({
+        system: `You are the coach in SocialOS, a social skills practice game for teenagers (age 11-15) with ASD.
 
 Your style:
-- Analytical, not emotional. Think game strategy guide, not therapy session.
-- Use pattern recognition language: "The signal you sent was...", "The dynamic at play was..."
-- Be direct about what worked and what didn't \u2014 no sugarcoating, but also no judgment
-- Frame social interactions as systems with inputs and outputs
-- Reference the specific choices they made
-- End with one concrete "pattern to remember" they can use in real life
-- Keep it to 3-4 paragraphs max
-- Use "you" to address the player directly`,
-          messages: [{ role: "user", content: prompt }]
-        })
+- Clear and direct. Use short sentences.
+- Use gaming language they know: "the move you made was...", "the result of that play was..."
+- Be honest about what worked and what didn't -- no sugarcoating, but be encouraging
+- Explain social situations like game mechanics: cause and effect, actions and reactions
+- Talk about the specific choices they made
+- End with one clear takeaway they can use in real life
+- Keep it to 3 short paragraphs max
+- Use "you" to talk to the player directly
+- Avoid long words when short ones work
+- Use examples from their world: school, friends, games, family`,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 800,
       });
-      const data = await response.json();
       const text = data.content?.map(b => b.text || "").join("") || "Debrief unavailable.";
       setDebriefText(text);
     } catch {
@@ -253,28 +238,21 @@ Your style:
   }
 
   // ─── DYNAMIC SCENARIO GENERATION ─────────────────────────────────
-  async function handleGenerateScenario(chapterId) {
+  async function doGenerateScenario(chapterId) {
     setGenerating(true);
     setGenerateError(null);
     try {
-      // Get existing titles to avoid duplicates
       const ch = getChapterFromId(chapterId);
       const existingTitles = [
         ...(ch?.scenarios || []).map(s => s.title),
         ...(generatedScenarios[chapterId] || []).map(s => s.title),
       ];
       const scenario = await generateScenario(chapterId, existingTitles);
-      const updated = saveGeneratedScenario(chapterId, scenario);
-      setGeneratedScenarios(updated);
+      await handleGenerateScenario(chapterId, scenario);
     } catch (err) {
       setGenerateError(err.message);
     }
     setGenerating(false);
-  }
-
-  function handleRemoveGenerated(chapterId, scenarioId) {
-    const updated = removeGeneratedScenario(chapterId, scenarioId);
-    setGeneratedScenarios(updated);
   }
 
   function getChapterFromId(chapterId) {
@@ -313,42 +291,8 @@ Your style:
     return turn?.emotion_guess || null;
   }
 
-  function rechargeEnergy() {
-    setEnergy(100);
-  }
-
-  function resetAllProgress() {
-    setEnergy(100);
-    setXp(0);
-    setStatusScore(0);
-    setReputation({});
-    setCompletedScenarios([]);
-    setFlashcardProgress({});
-    localStorage.removeItem("socialos-flashcard-progress");
-    localStorage.removeItem("socialos-onboarding-seen");
-    setHasSeenOnboarding(false);
-    setScreen("onboarding");
-  }
-
   // ─── RENDER ─────────────────────────────────────────────────────
   const levelEntries = Object.entries(SCENARIOS);
-
-  // Parent dashboard
-  if (screen === "parent") {
-    return (
-      <ParentDashboard
-        onClose={goHome}
-        playerStats={{
-          energy,
-          xp,
-          statusScore,
-          reputation,
-          completedScenarios,
-          flashcardProgress,
-        }}
-      />
-    );
-  }
 
   return (
     <div style={{
@@ -386,7 +330,7 @@ Your style:
               <StatPill label="XP" value={xp} color={theme.xp} />
               <StatPill label="STATUS" value={totalStatus} color={totalStatus >= 0 ? theme.info : theme.danger} showSign />
               <button
-                onClick={() => { setHasSeenOnboarding(true); setScreen("onboarding"); }}
+                onClick={() => { setScreen("onboarding"); }}
                 title="How to play"
                 style={{
                   background: theme.border,
@@ -451,7 +395,6 @@ Your style:
                           key={a.scenarioId}
                           onClick={() => {
                             if (energy >= sc.energy_cost) {
-                              // Find the level and chapter for navigation
                               const loc = findScenarioLocation(a.scenarioId);
                               if (loc) {
                                 setSelectedLevel(loc.levelId);
@@ -510,27 +453,29 @@ Your style:
                     const chapters = Object.values(level.chapters);
                     const hasScenarios = chapters.some(ch => ch.scenarios?.length > 0);
                     const levelColor = theme.levels[levelId] || level.color;
+                    const requiredXp = LEVEL_XP_REQUIREMENTS[levelId] || 0;
+                    const isLocked = xp < requiredXp;
                     return (
                       <div
                         key={levelId}
-                        onClick={() => openLevel(levelId)}
+                        onClick={() => !isLocked && hasScenarios && openLevel(levelId)}
                         style={{
                           background: theme.surface,
                           border: `1px solid ${theme.border}`,
-                          borderLeft: `4px solid ${levelColor}`,
+                          borderLeft: `4px solid ${isLocked ? theme.textMuted : levelColor}`,
                           borderRadius: theme.radiusMd,
                           padding: "20px 24px",
-                          cursor: "pointer",
+                          cursor: isLocked || !hasScenarios ? "default" : "pointer",
+                          opacity: isLocked ? 0.5 : hasScenarios ? 1 : 0.55,
                           transition: "all 0.2s ease",
-                          opacity: hasScenarios ? 1 : 0.55,
                           boxShadow: theme.shadow,
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = theme.shadowMd; }}
+                        onMouseEnter={e => { if (!isLocked && hasScenarios) { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = theme.shadowMd; } }}
                         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = theme.shadow; }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div>
-                            <div style={{ fontSize: 11, color: levelColor, letterSpacing: 2, marginBottom: 6, fontWeight: 700 }}>
+                            <div style={{ fontSize: 11, color: isLocked ? theme.textMuted : levelColor, letterSpacing: 2, marginBottom: 6, fontWeight: 700 }}>
                               {LEVEL_ICONS[levelId]} LEVEL {i + 1}
                             </div>
                             <div style={{ fontSize: 20, fontWeight: 800 }}>{level.title}</div>
@@ -538,7 +483,17 @@ Your style:
                               {chapters.length} chapters {"·"} {chapters.reduce((n, ch) => n + (ch.scenarios?.length || 0), 0)} scenarios
                             </div>
                           </div>
-                          {!hasScenarios && (
+                          {isLocked && (
+                            <div style={{ textAlign: "center" }}>
+                              <span style={{ fontSize: 20 }}>{"🔒"}</span>
+                              <div style={{
+                                fontSize: 11, color: theme.xp, fontWeight: 700, marginTop: 4,
+                              }}>
+                                {requiredXp} XP
+                              </div>
+                            </div>
+                          )}
+                          {!isLocked && !hasScenarios && (
                             <span style={{
                               fontSize: 11, color: theme.textMuted, fontWeight: 700,
                               background: theme.border, padding: "5px 12px", borderRadius: 20
@@ -546,7 +501,7 @@ Your style:
                               COMING SOON
                             </span>
                           )}
-                          {hasScenarios && (
+                          {!isLocked && hasScenarios && (
                             <span style={{ fontSize: 20, color: theme.textMuted }}>{"→"}</span>
                           )}
                         </div>
@@ -555,7 +510,7 @@ Your style:
                   })}
                 </div>
 
-                {/* Recharge, Reset & Parent */}
+                {/* Action buttons */}
                 <div style={{ marginTop: 32, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
                   {energy < 50 && (
                     <button
@@ -570,21 +525,24 @@ Your style:
                       {"⚡"} Recharge Energy
                     </button>
                   )}
-                  <button
-                    onClick={() => setScreen("parent")}
-                    style={{
-                      padding: "10px 20px", borderRadius: theme.radiusMd,
-                      background: `${theme.purple}10`, border: `1px solid ${theme.purple}30`,
-                      color: theme.purple, fontSize: 13, fontWeight: 700,
-                      cursor: "pointer", fontFamily: theme.fontFamily,
-                    }}
-                  >
-                    {"🔒"} Parent Dashboard
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => navigate("/admin")}
+                      style={{
+                        padding: "10px 20px", borderRadius: theme.radiusMd,
+                        background: `${theme.purple}10`, border: `1px solid ${theme.purple}30`,
+                        color: theme.purple, fontSize: 13, fontWeight: 700,
+                        cursor: "pointer", fontFamily: theme.fontFamily,
+                      }}
+                    >
+                      {"🛡️"} Admin Dashboard
+                    </button>
+                  )}
                   <button
                     onClick={() => {
-                      if (window.confirm("Reset all progress? This will clear everything — XP, energy, reputation, completed scenarios, and flashcard progress.")) {
+                      if (window.confirm("Reset all progress? This will clear everything.")) {
                         resetAllProgress();
+                        setScreen("onboarding");
                       }
                     }}
                     style={{
@@ -595,6 +553,17 @@ Your style:
                     }}
                   >
                     {"↻"} Reset Progress
+                  </button>
+                  <button
+                    onClick={async () => { await forceSave(); await signOut(); }}
+                    style={{
+                      padding: "10px 20px", borderRadius: theme.radiusMd,
+                      background: "transparent", border: `1px solid ${theme.border}`,
+                      color: theme.textMuted, fontSize: 13, fontWeight: 600,
+                      cursor: "pointer", fontFamily: theme.fontFamily,
+                    }}
+                  >
+                    Sign Out
                   </button>
                 </div>
               </div>
@@ -664,13 +633,21 @@ Your style:
               const progress = flashcardProgress[selectedChapter] || 0;
               const genScenarios = generatedScenarios[selectedChapter] || [];
               const canGen = canGenerateForChapter(selectedChapter);
+
+              // Scenario limit: 2 AI-generated base + approved extra slots
+              const baseGenLimit = 2;
+              const extraSlots = getApprovedExtraSlots(selectedChapter);
+              const maxGenerated = baseGenLimit + extraSlots;
+              const canGenerateMore = genScenarios.length < maxGenerated;
+              const pendingRequest = hasPendingRequest(selectedChapter);
+
               return (
                 <div>
                   <BackBtn onClick={() => setScreen("levels")} label={`Back to ${SCENARIOS[selectedLevel].title}`} />
                   <h2 style={{ fontSize: 28, fontWeight: 800, margin: "16px 0 4px" }}>{ch.title}</h2>
                   <p style={{ color: theme.textSecondary, fontSize: 15, margin: "0 0 28px" }}>{ch.subtitle}</p>
 
-                  {/* Learn Concepts — Flashcard Deck */}
+                  {/* Learn Concepts */}
                   {cards.length > 0 && (
                     <div
                       onClick={() => openFlashcards(selectedChapter)}
@@ -743,25 +720,11 @@ Your style:
                     </>
                   )}
 
-                  {ch.scenarios.length === 0 && genScenarios.length === 0 && !canGen && (
-                    <div style={{
-                      padding: "20px 24px",
-                      background: theme.surface,
-                      border: `1px solid ${theme.border}`,
-                      borderRadius: theme.radiusMd,
-                      color: theme.textMuted,
-                      fontSize: 14,
-                      textAlign: "center",
-                    }}>
-                      Practice scenarios coming soon
-                    </div>
-                  )}
-
                   {/* AI-Generated Scenarios */}
                   {genScenarios.length > 0 && (
                     <>
                       <div style={{ fontSize: 11, color: theme.info, letterSpacing: 2, marginTop: 24, marginBottom: 12, fontWeight: 700 }}>
-                        {"🤖"} AI-GENERATED SCENARIOS
+                        {"🤖"} AI-GENERATED SCENARIOS ({genScenarios.length}/{maxGenerated})
                       </div>
                       {genScenarios.map(sc => (
                         <div key={sc.id} style={{ position: "relative" }}>
@@ -774,7 +737,7 @@ Your style:
                             isGenerated
                           />
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleRemoveGenerated(selectedChapter, sc.id); }}
+                            onClick={(e) => { e.stopPropagation(); handleRemoveGenerated(sc.id); }}
                             title="Remove this generated scenario"
                             style={{
                               position: "absolute", top: 12, right: 12,
@@ -788,33 +751,56 @@ Your style:
                     </>
                   )}
 
-                  {/* Generate New Scenario Button */}
+                  {/* Generate / Request More Button */}
                   {canGen && (
                     <div style={{ marginTop: 20 }}>
-                      <button
-                        onClick={() => !generating && handleGenerateScenario(selectedChapter)}
-                        disabled={generating}
-                        style={{
-                          width: "100%",
-                          padding: "16px 20px",
-                          borderRadius: theme.radiusMd,
-                          background: generating ? theme.surface : `${theme.info}08`,
-                          border: `2px dashed ${generating ? theme.border : theme.info + "40"}`,
-                          color: generating ? theme.textMuted : theme.info,
-                          fontSize: 15, fontWeight: 700,
-                          cursor: generating ? "default" : "pointer",
-                          fontFamily: theme.fontFamily,
-                          transition: "all 0.2s ease",
-                        }}
-                      >
-                        {generating ? (
-                          <span style={{ display: "inline-block", animation: "pulse 1.5s infinite" }}>
-                            {"🤖"} Generating new scenario...
-                          </span>
-                        ) : (
-                          <span>{"🤖"} Generate AI Scenario</span>
-                        )}
-                      </button>
+                      {canGenerateMore ? (
+                        <button
+                          onClick={() => !generating && doGenerateScenario(selectedChapter)}
+                          disabled={generating}
+                          style={{
+                            width: "100%",
+                            padding: "16px 20px",
+                            borderRadius: theme.radiusMd,
+                            background: generating ? theme.surface : `${theme.info}08`,
+                            border: `2px dashed ${generating ? theme.border : theme.info + "40"}`,
+                            color: generating ? theme.textMuted : theme.info,
+                            fontSize: 15, fontWeight: 700,
+                            cursor: generating ? "default" : "pointer",
+                            fontFamily: theme.fontFamily,
+                            transition: "all 0.2s ease",
+                          }}
+                        >
+                          {generating ? (
+                            <span style={{ display: "inline-block", animation: "pulse 1.5s infinite" }}>
+                              {"🤖"} Generating new scenario...
+                            </span>
+                          ) : (
+                            <span>{"🤖"} Generate AI Scenario ({genScenarios.length}/{maxGenerated})</span>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => !pendingRequest && handleRequestUnlock(selectedChapter)}
+                          disabled={pendingRequest}
+                          style={{
+                            width: "100%",
+                            padding: "16px 20px",
+                            borderRadius: theme.radiusMd,
+                            background: pendingRequest ? theme.surface : `${theme.purple}08`,
+                            border: `2px dashed ${pendingRequest ? theme.border : theme.purple + "40"}`,
+                            color: pendingRequest ? theme.textMuted : theme.purple,
+                            fontSize: 15, fontWeight: 700,
+                            cursor: pendingRequest ? "default" : "pointer",
+                            fontFamily: theme.fontFamily,
+                          }}
+                        >
+                          {pendingRequest
+                            ? "📩 Unlock request sent — waiting for admin"
+                            : "📩 Request More Scenarios"
+                          }
+                        </button>
+                      )}
                       {generateError && (
                         <div style={{
                           marginTop: 8, padding: "10px 14px",
@@ -847,7 +833,7 @@ Your style:
                   {cards.length > 0 ? (
                     <SwipeDeck
                       cards={cards}
-                      onComplete={() => completeFlashcards(selectedChapter, cards.length)}
+                      onComplete={() => handleCompleteFlashcards(selectedChapter, cards.length)}
                       chapterColor={levelColor}
                     />
                   ) : (
@@ -1026,7 +1012,7 @@ Your style:
                 <h2 style={{ fontSize: 26, fontWeight: 800, margin: "0 0 4px" }}>{selectedScenario.title}</h2>
                 <p style={{ color: theme.textSecondary, fontSize: 14, margin: "0 0 24px" }}>Analytical breakdown of your choices</p>
 
-                {/* Choice summary */}
+                {/* Choice summary — uses debriefChoices (not choiceHistory) */}
                 <div style={{
                   background: theme.surface,
                   border: `1px solid ${theme.border}`,
@@ -1036,8 +1022,8 @@ Your style:
                   boxShadow: theme.shadow,
                 }}>
                   <div style={{ fontSize: 11, color: theme.textSecondary, letterSpacing: 2, marginBottom: 12, fontWeight: 700 }}>YOUR PATH</div>
-                  {choiceHistory.map((c, i) => (
-                    <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: i < choiceHistory.length - 1 ? `1px solid ${theme.border}` : "none" }}>
+                  {debriefChoices.map((c, i) => (
+                    <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: i < debriefChoices.length - 1 ? `1px solid ${theme.border}` : "none" }}>
                       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, color: theme.textMuted }}>Decision {i + 1}</div>
                       <div style={{ fontSize: 15, color: theme.textSecondary, lineHeight: 1.5 }}>{c.text}</div>
                       <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1065,7 +1051,7 @@ Your style:
                 <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
                   <StatCard label="ENERGY SPENT" value={`-${selectedScenario.energy_cost}`} color={theme.danger} bgColor={`${theme.danger}08`} />
                   <StatCard label="XP EARNED" value={`+${selectedScenario.xp_reward}`} color={theme.xp} bgColor={`${theme.xp}10`} />
-                  <StatCard label="NET STATUS" value={`${scenarioStatus > 0 ? "+" : ""}${scenarioStatus}`} color={scenarioStatus >= 0 ? theme.accent : theme.danger} bgColor={scenarioStatus >= 0 ? `${theme.accent}08` : `${theme.danger}08`} />
+                  <StatCard label="NET STATUS" value={`${debriefStatusDelta > 0 ? "+" : ""}${debriefStatusDelta}`} color={debriefStatusDelta >= 0 ? theme.accent : theme.danger} bgColor={debriefStatusDelta >= 0 ? `${theme.accent}08` : `${theme.danger}08`} />
                 </div>
 
                 {/* AI Debrief */}
@@ -1141,12 +1127,6 @@ function findScenarioById(scenarioId) {
       if (found) return found;
     }
   }
-  // Also check generated scenarios
-  const gen = JSON.parse(localStorage.getItem("socialos-generated-scenarios") || "{}");
-  for (const chScenarios of Object.values(gen)) {
-    const found = chScenarios.find(s => s.id === scenarioId);
-    if (found) return found;
-  }
   return null;
 }
 
@@ -1207,8 +1187,30 @@ function ScenarioCard({ scenario: sc, done, lowEnergy, assigned, onStart, isGene
         </div>
       </div>
       {lowEnergy && (
-        <div style={{ fontSize: 13, color: theme.danger, marginTop: 8, fontWeight: 600 }}>Not enough energy — rest or come back later</div>
+        <div style={{ fontSize: 13, color: theme.danger, marginTop: 8, fontWeight: 600 }}>Not enough energy</div>
       )}
+    </div>
+  );
+}
+
+function LoadingScreen({ message = "Loading..." }) {
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: theme.bg,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      fontFamily: theme.fontFamily,
+      color: theme.textSecondary,
+      gap: 16,
+    }}>
+      <div style={{ fontSize: 28, fontWeight: 800, color: theme.textPrimary }}>
+        Social<span style={{ color: theme.accent }}>OS</span>
+      </div>
+      <div style={{ fontSize: 14, animation: "pulse 1.5s infinite" }}>{message}</div>
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }`}</style>
     </div>
   );
 }
