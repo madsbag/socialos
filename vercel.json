@@ -1,6 +1,11 @@
 {
+  "redirects": [
+    { "source": "/", "destination": "/socialos/", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/socialos/api/(.*)", "destination": "/api/$1" },
+    { "source": "/socialos/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/socialos/:file(.*\\.(?:png|svg|json|ico|webmanifest|js|css|woff2?)$)", "destination": "/:file" },
     { "source": "/socialos/(.*)", "destination": "/index.html" },
     { "source": "/socialos", "destination": "/index.html" }
   ]
