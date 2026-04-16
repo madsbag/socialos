@@ -9,7 +9,7 @@ export async function callAnthropic({ system, messages, max_tokens = 1000 }) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
-  const response = await fetch('/api/anthropic-proxy', {
+  const response = await fetch(import.meta.env.BASE_URL + 'api/anthropic-proxy', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
